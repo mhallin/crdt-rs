@@ -1,5 +1,8 @@
+#![feature(zero_one)]
+#![feature(iter_arith)]
+
 mod core;
 mod counters;
 
 pub use core::Operation;
-pub use counters::{OpCounter, GCounter, IncrementOperation};
+pub use counters::{GCounter, PNCounter};
