@@ -6,44 +6,55 @@ use std::hash::Hash;
 use core::{Operation, StateRDT};
 
 #[derive(Debug, RustcEncodable, RustcDecodable)]
-pub struct GCounter<K: Hash + Eq + Clone, T: Ord + Add<T, Output=T> + Copy> {
-    my_id: K,
-    counters: HashMap<K, T>,
+pub struct GCounter<HostT, ValueT>
+    where HostT: Hash + Eq + Clone,
+          ValueT: Add<ValueT, Output=ValueT> + Ord + Zero + Copy
+{
+    my_id: HostT,
+    counters: HashMap<HostT, ValueT>,
 }
 
 #[derive(Debug, RustcEncodable, RustcDecodable)]
-pub struct SetGCounterOperation<K, T> {
-    id: K,
-    value: T,
+pub struct SetGCounterOperation<HostT, ValueT> {
+    id: HostT,
+    value: ValueT,
 }
 
 #[derive(Debug, RustcEncodable, RustcDecodable)]
-pub struct PNCounter<K: Hash + Eq + Clone, T: Ord + Add<T, Output=T> + Sub<T, Output=T> + Copy> {
-    my_id: K,
-    pos_counters: HashMap<K, T>,
-    neg_counters: HashMap<K, T>,
+pub struct PNCounter<HostT, ValueT>
+    where HostT: Hash + Eq + Clone,
+          ValueT: Add<ValueT, Output=ValueT> + Ord + Zero + Copy
+{
+    my_id: HostT,
+    pos_counters: HashMap<HostT, ValueT>,
+    neg_counters: HashMap<HostT, ValueT>,
 }
 
 #[derive(Debug, RustcEncodable, RustcDecodable)]
-pub struct SetPNCounterOperation<K, T> {
-    id: K,
-    pos_value: T,
-    neg_value: T,
+pub struct SetPNCounterOperation<HostT, ValueT> {
+    id: HostT,
+    pos_value: ValueT,
+    neg_value: ValueT,
 }
 
-impl<K: Hash + Eq + Clone, T: Zero + Ord + Copy + Add<T, Output=T>> GCounter<K, T> {
-    pub fn new(my_id: K) -> Self {
+impl<HostT, ValueT> GCounter<HostT, ValueT>
+    where HostT: Hash + Eq + Clone,
+          ValueT: Add<ValueT, Output=ValueT> + Ord + Zero + Copy
+{
+    pub fn new(my_id: HostT) -> Self {
         GCounter {
             counters: HashMap::new(),
             my_id: my_id,
         }
     }
 
-    pub fn value(&self) -> T {
+    pub fn value(&self) -> ValueT {
         self.counters.values().cloned().sum()
     }
 
-    pub fn add(&mut self, value: T) -> Option<SetGCounterOperation<K, T>> {
+    pub fn add(&mut self, value: ValueT)
+        -> Option<SetGCounterOperation<HostT, ValueT>>
+    {
         if value < Zero::zero() {
             return None;
         }
@@ -59,8 +70,14 @@ impl<K: Hash + Eq + Clone, T: Zero + Ord + Copy + Add<T, Output=T>> GCounter<K, 
     }
 }
 
-impl<K: Hash + Eq + Clone, T: Neg<Output=T> + Zero + Ord + Copy + Add<T, Output=T> + Sub<T, Output=T>> PNCounter<K, T> {
-    pub fn new(my_id: K) -> Self {
+impl<HostT, ValueT> PNCounter<HostT, ValueT>
+    where HostT: Hash + Eq + Clone,
+          ValueT: Add<ValueT, Output=ValueT> +
+                  Sub<ValueT, Output=ValueT> +
+                  Neg<Output=ValueT> +
+                  Ord + Zero + Copy
+{
+    pub fn new(my_id: HostT) -> Self {
         PNCounter {
             my_id: my_id,
             pos_counters: HashMap::new(),
@@ -68,14 +85,16 @@ impl<K: Hash + Eq + Clone, T: Neg<Output=T> + Zero + Ord + Copy + Add<T, Output=
         }
     }
 
-    pub fn value(&self) -> T {
-        let pos: T = self.pos_counters.values().cloned().sum();
-        let neg: T = self.neg_counters.values().cloned().sum();
+    pub fn value(&self) -> ValueT {
+        let pos: ValueT = self.pos_counters.values().cloned().sum();
+        let neg: ValueT = self.neg_counters.values().cloned().sum();
 
         pos - neg
     }
 
-    pub fn add(&mut self, value: T) -> Option<SetPNCounterOperation<K, T>> {
+    pub fn add(&mut self, value: ValueT)
+        -> Option<SetPNCounterOperation<HostT, ValueT>>
+    {
         let op = if value >= Zero::zero() {
             SetPNCounterOperation {
                 id: self.my_id.clone(),
@@ -97,9 +116,15 @@ impl<K: Hash + Eq + Clone, T: Neg<Output=T> + Zero + Ord + Copy + Add<T, Output=
     }
 }
 
-impl<K: Hash + Eq + Clone, T: Zero + Ord + Copy + Add<T, Output=T>> Operation<GCounter<K, T>> for SetGCounterOperation<K, T> {
-    fn apply(&self, target: &mut GCounter<K, T>) {
-        let cur_value = target.counters.get(&self.id).cloned().unwrap_or(Zero::zero());
+impl<HostT, ValueT>
+    Operation<GCounter<HostT, ValueT>>
+    for SetGCounterOperation<HostT, ValueT>
+    where HostT: Hash + Eq + Clone,
+          ValueT: Ord + Add<ValueT, Output=ValueT> + Zero + Copy
+{
+    fn apply(&self, target: &mut GCounter<HostT, ValueT>) {
+        let cur_value = target.counters.get(&self.id).cloned()
+            .unwrap_or(Zero::zero());
 
         target.counters.insert(
             self.id.clone(),
@@ -107,10 +132,16 @@ impl<K: Hash + Eq + Clone, T: Zero + Ord + Copy + Add<T, Output=T>> Operation<GC
     }
 }
 
-impl<K: Hash + Eq + Clone, T: Zero + Ord + Copy + Add<T, Output=T>> StateRDT for GCounter<K, T> {
+impl<HostT, ValueT>
+    StateRDT
+    for GCounter<HostT, ValueT>
+    where HostT: Hash + Eq + Clone,
+          ValueT: Ord + Add<ValueT, Output=ValueT> + Zero + Copy
+{
     fn merge(&mut self, other: &Self) {
         for (id, &value) in &other.counters {
-            let cur_value = self.counters.get(id).cloned().unwrap_or(Zero::zero());
+            let cur_value = self.counters.get(id).cloned()
+                .unwrap_or(Zero::zero());
 
             self.counters.insert(
                 id.clone(),
@@ -119,10 +150,20 @@ impl<K: Hash + Eq + Clone, T: Zero + Ord + Copy + Add<T, Output=T>> StateRDT for
     }
 }
 
-impl<K: Hash + Eq + Clone, T: Zero + Ord + Copy + Add<T, Output=T> + Sub<T, Output=T>> Operation<PNCounter<K, T>> for SetPNCounterOperation<K, T> {
-    fn apply(&self, target: &mut PNCounter<K, T>) {
-        let cur_pos_value = target.pos_counters.get(&self.id).cloned().unwrap_or(Zero::zero());
-        let cur_neg_value = target.neg_counters.get(&self.id).cloned().unwrap_or(Zero::zero());
+impl<HostT, ValueT>
+    Operation<PNCounter<HostT, ValueT>>
+    for SetPNCounterOperation<HostT, ValueT>
+    where HostT: Hash + Eq + Clone,
+          ValueT: Add<ValueT, Output=ValueT> +
+                  Sub<ValueT, Output=ValueT> +
+                  Neg<Output=ValueT> +
+                  Zero + Ord + Copy
+{
+    fn apply(&self, target: &mut PNCounter<HostT, ValueT>) {
+        let cur_pos_value = target.pos_counters.get(&self.id).cloned()
+            .unwrap_or(Zero::zero());
+        let cur_neg_value = target.neg_counters.get(&self.id).cloned()
+            .unwrap_or(Zero::zero());
 
         target.pos_counters.insert(
             self.id.clone(),
@@ -133,10 +174,19 @@ impl<K: Hash + Eq + Clone, T: Zero + Ord + Copy + Add<T, Output=T> + Sub<T, Outp
     }
 }
 
-impl<K: Hash + Eq + Clone, T: Zero + Ord + Copy + Add<T, Output=T> + Sub<T, Output=T>> StateRDT for PNCounter<K, T> {
+impl<HostT, ValueT>
+    StateRDT
+    for PNCounter<HostT, ValueT>
+    where HostT: Hash + Eq + Clone,
+          ValueT: Add<ValueT, Output=ValueT> +
+                  Sub<ValueT, Output=ValueT> +
+                  Sub<Output=ValueT> +
+                  Zero + Ord + Copy
+{
     fn merge(&mut self, other: &Self) {
         for (id, &pos_value) in &other.pos_counters {
-            let cur_pos_value = self.pos_counters.get(id).cloned().unwrap_or(Zero::zero());
+            let cur_pos_value = self.pos_counters.get(id).cloned()
+                .unwrap_or(Zero::zero());
 
             self.pos_counters.insert(
                 id.clone(),
@@ -144,7 +194,8 @@ impl<K: Hash + Eq + Clone, T: Zero + Ord + Copy + Add<T, Output=T> + Sub<T, Outp
         }
 
         for (id, &neg_value) in &other.neg_counters {
-            let cur_neg_value = self.neg_counters.get(id).cloned().unwrap_or(Zero::zero());
+            let cur_neg_value = self.neg_counters.get(id).cloned()
+                .unwrap_or(Zero::zero());
 
             self.neg_counters.insert(
                 id.clone(),
