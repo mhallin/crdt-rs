@@ -5,26 +5,26 @@ use std::hash::Hash;
 
 use core::{Operation, StateRDT};
 
-#[derive(Debug)]
+#[derive(Debug, RustcEncodable, RustcDecodable)]
 pub struct GCounter<K: Hash + Eq + Clone, T: Ord + Add<T, Output=T> + Copy> {
     my_id: K,
     counters: HashMap<K, T>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, RustcEncodable, RustcDecodable)]
 pub struct SetGCounterOperation<K, T> {
     id: K,
     value: T,
 }
 
-#[derive(Debug)]
+#[derive(Debug, RustcEncodable, RustcDecodable)]
 pub struct PNCounter<K: Hash + Eq + Clone, T: Ord + Add<T, Output=T> + Sub<T, Output=T> + Copy> {
     my_id: K,
     pos_counters: HashMap<K, T>,
     neg_counters: HashMap<K, T>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, RustcEncodable, RustcDecodable)]
 pub struct SetPNCounterOperation<K, T> {
     id: K,
     pos_value: T,

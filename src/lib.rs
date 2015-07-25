@@ -2,6 +2,7 @@
 #![feature(iter_arith)]
 
 extern crate chrono;
+extern crate rustc_serialize;
 
 mod core;
 mod counters;

@@ -4,4 +4,8 @@ version = "0.1.0"
 authors = ["mhallin <mhallin@gmail.com>"]
 
 [dependencies]
-chrono = "*"
+rustc-serialize = "*"
+
+[dependencies.chrono]
+version = "*"
+features = ["rustc-serialize"]

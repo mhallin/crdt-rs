@@ -4,11 +4,13 @@ use chrono::{NaiveDateTime, DateTime, UTC, TimeZone};
 
 use core::{Operation, StateRDT};
 
+#[derive(RustcEncodable, RustcDecodable)]
 pub struct LWWRegister<T: Default + Clone> {
     value: T,
     timestamp: DateTime<UTC>,
 }
 
+#[derive(RustcEncodable, RustcDecodable)]
 pub struct SetLWWRegisterOperation<T: Default + Clone> {
     value: T,
     timestamp: DateTime<UTC>,
