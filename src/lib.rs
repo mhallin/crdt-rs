@@ -12,4 +12,4 @@ mod sets;
 pub use core::Operation;
 pub use counters::{GCounter, PNCounter};
 pub use registers::LWWRegister;
-pub use sets::GSet;
+pub use sets::{GSet, TwoPhaseSet};
