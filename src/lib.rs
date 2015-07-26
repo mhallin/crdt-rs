@@ -9,7 +9,9 @@ mod core;
 mod counters;
 mod registers;
 mod sets;
+mod maps;
 
 pub use counters::{GCounter, PNCounter};
 pub use registers::LWWRegister;
 pub use sets::{GSet, TwoPhaseSet, ObserveRemoveSet};
+pub use maps::ObserveRemoveMap;
