@@ -2,6 +2,9 @@
 name = "crdt"
 version = "0.1.0"
 authors = ["mhallin <mhallin@gmail.com>"]
+description = "A small sample of Conflict-free Replicated Data Types"
+license = "MIT"
+homepage = "https://github.com/mhallin/crdt-rs"
 
 [dependencies]
 rustc-serialize = "*"
