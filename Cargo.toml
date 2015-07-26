@@ -5,6 +5,7 @@ authors = ["mhallin <mhallin@gmail.com>"]
 
 [dependencies]
 rustc-serialize = "*"
+uuid = "*"
 
 [dependencies.chrono]
 version = "*"
