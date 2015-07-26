@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 use std::hash::Hash;
 
-use core::{Operation, StateRDT};
+use core::{StateRDT, OperationRDT};
 
 #[derive(Debug, RustcEncodable, RustcDecodable)]
 pub struct GSet<T: Hash + Eq + Clone> {
@@ -9,9 +9,7 @@ pub struct GSet<T: Hash + Eq + Clone> {
 }
 
 #[derive(Debug, RustcEncodable, RustcDecodable)]
-pub struct AddGSetOperation<T> {
-    value: T
-}
+pub struct AddGSetOperation<T>(T);
 
 #[derive(Debug, RustcEncodable, RustcDecodable)]
 pub struct TwoPhaseSet<T: Hash + Eq + Clone> {
@@ -20,13 +18,9 @@ pub struct TwoPhaseSet<T: Hash + Eq + Clone> {
 }
 
 #[derive(Debug, RustcEncodable, RustcDecodable)]
-pub struct Add2PSetOperation<T> {
-    value: T,
-}
-
-#[derive(Debug, RustcEncodable, RustcDecodable)]
-pub struct Remove2PSetOperation<T> {
-    value: T,
+pub enum TwoPhaseSetOperation<T: Hash + Eq + Clone> {
+    Add(T),
+    Remove(T),
 }
 
 impl<T: Hash + Eq + Clone> GSet<T> {
@@ -45,17 +39,21 @@ impl<T: Hash + Eq + Clone> GSet<T> {
             return None;
         }
 
-        let op = AddGSetOperation { value: value };
+        let op = AddGSetOperation(value);
 
-        op.apply(self);
+        self.apply(&op);
 
         Some(op)
     }
 }
 
-impl<T: Hash + Eq + Clone> Operation<GSet<T>> for AddGSetOperation<T> {
-    fn apply(&self, target: &mut GSet<T>) {
-        target.set.insert(self.value.clone());
+impl<T: Hash + Eq + Clone> OperationRDT for GSet<T> {
+    type Operation = AddGSetOperation<T>;
+
+    fn apply(&mut self, op: &Self::Operation) {
+        let &AddGSetOperation(ref value) = op;
+
+        self.set.insert(value.clone());
     }
 }
 
@@ -77,40 +75,41 @@ impl<T: Hash + Eq + Clone> TwoPhaseSet<T> {
         self.members.difference(&self.tombstones).cloned().collect()
     }
 
-    pub fn add(&mut self, value: T) -> Option<Add2PSetOperation<T>> {
+    pub fn add(&mut self, value: T) -> Option<TwoPhaseSetOperation<T>> {
         if self.value().contains(&value) {
             return None;
         }
 
-        let op = Add2PSetOperation { value: value };
+        let op = TwoPhaseSetOperation::Add(value);
 
-        op.apply(self);
+        self.apply(&op);
 
         Some(op)
     }
 
-    pub fn remove(&mut self, value: T) -> Option<Remove2PSetOperation<T>> {
+    pub fn remove(&mut self, value: T) -> Option<TwoPhaseSetOperation<T>> {
         if !self.value().contains(&value) {
             return None;
         }
 
-        let op = Remove2PSetOperation { value: value };
+        let op = TwoPhaseSetOperation::Remove(value);
 
-        op.apply(self);
+        self.apply(&op);
 
         Some(op)
     }
 }
 
-impl<T: Hash + Eq + Clone> Operation<TwoPhaseSet<T>> for Add2PSetOperation<T> {
-    fn apply(&self, target: &mut TwoPhaseSet<T>) {
-        target.members.insert(self.value.clone());
-    }
-}
+impl<T: Hash + Eq + Clone> OperationRDT for TwoPhaseSet<T> {
+    type Operation = TwoPhaseSetOperation<T>;
 
-impl<T: Hash + Eq + Clone> Operation<TwoPhaseSet<T>> for Remove2PSetOperation<T> {
-    fn apply(&self, target: &mut TwoPhaseSet<T>) {
-        target.tombstones.insert(self.value.clone());
+    fn apply(&mut self, op: &Self::Operation) {
+        use self::TwoPhaseSetOperation::{Add, Remove};
+
+        match op {
+            &Add(ref value) => self.members.insert(value.clone()),
+            &Remove(ref value) => self.tombstones.insert(value.clone()),
+        };
     }
 }
 
@@ -128,7 +127,7 @@ mod test {
     use std::collections::HashSet;
     use std::iter::FromIterator;
 
-    use core::{Operation, StateRDT};
+    use core::{StateRDT, OperationRDT};
 
     #[test]
     fn make_g_set() {
@@ -154,8 +153,8 @@ mod test {
         let op1 = s1.add(123).unwrap();
         let op2 = s2.add(456).unwrap();
 
-        op2.apply(&mut s1);
-        op1.apply(&mut s2);
+        s1.apply(&op2);
+        s2.apply(&op1);
 
         assert_eq!(*s1.value(), HashSet::from_iter(vec![123, 456]));
         assert_eq!(*s2.value(), HashSet::from_iter(vec![123, 456]));
@@ -211,15 +210,15 @@ mod test {
         let op1 = s1.add(123).unwrap();
         let op2 = s2.add(456).unwrap();
 
-        op2.apply(&mut s1);
-        op1.apply(&mut s2);
+        s1.apply(&op2);
+        s2.apply(&op1);
 
         assert_eq!(s1.value(), HashSet::from_iter(vec![123, 456]));
         assert_eq!(s2.value(), HashSet::from_iter(vec![123, 456]));
 
         let op3 = s1.remove(456).unwrap();
 
-        op3.apply(&mut s2);
+        s2.apply(&op3);
 
         assert_eq!(s1.value(), HashSet::from_iter(vec![123]));
         assert_eq!(s2.value(), HashSet::from_iter(vec![123]));

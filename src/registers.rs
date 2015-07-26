@@ -2,7 +2,7 @@ use std::default::Default;
 
 use chrono::{NaiveDateTime, DateTime, UTC, TimeZone};
 
-use core::{Operation, StateRDT};
+use core::{StateRDT, OperationRDT};
 
 #[derive(RustcEncodable, RustcDecodable)]
 pub struct LWWRegister<T: Default + Clone> {
@@ -34,17 +34,19 @@ impl<T: Default + Clone> LWWRegister<T> {
             timestamp: UTC::now(),
         };
 
-        op.apply(self);
+        self.apply(&op);
 
         op
     }
 }
 
-impl<T: Default + Clone> Operation<LWWRegister<T>> for SetLWWRegisterOperation<T> {
-    fn apply(&self, target: &mut LWWRegister<T>) {
-        if self.timestamp > target.timestamp {
-            target.value = self.value.clone();
-            target.timestamp = self.timestamp.clone();
+impl<T: Default + Clone> OperationRDT for LWWRegister<T> {
+    type Operation = SetLWWRegisterOperation<T>;
+
+    fn apply(&mut self, op: &Self::Operation) {
+        if op.timestamp > self.timestamp {
+            self.value = op.value.clone();
+            self.timestamp = op.timestamp.clone();
         }
     }
 }
@@ -61,7 +63,7 @@ impl<T: Default + Clone> StateRDT for LWWRegister<T> {
 #[cfg(test)]
 mod test {
     use super::LWWRegister;
-    use core::{Operation, StateRDT};
+    use core::{StateRDT, OperationRDT};
 
     #[test]
     fn make_lww_register() {
@@ -87,8 +89,8 @@ mod test {
         let op1 = r1.set("first");
         let op2 = r2.set("last");
 
-        op2.apply(&mut r1);
-        op1.apply(&mut r2);
+        r1.apply(&op2);
+        r2.apply(&op1);
 
         assert_eq!(r1.value(), &"last");
         assert_eq!(r2.value(), &"last");

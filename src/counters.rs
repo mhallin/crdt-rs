@@ -3,7 +3,7 @@ use std::ops::{Add, Sub, Neg};
 use std::collections::HashMap;
 use std::hash::Hash;
 
-use core::{Operation, StateRDT};
+use core::{StateRDT, OperationRDT};
 
 #[derive(Debug, RustcEncodable, RustcDecodable)]
 pub struct GCounter<HostT, ValueT>
@@ -64,7 +64,7 @@ impl<HostT, ValueT> GCounter<HostT, ValueT>
             value: self.value() + value,
         };
 
-        op.apply(self);
+        self.apply(&op);
 
         Some(op)
     }
@@ -110,25 +110,27 @@ impl<HostT, ValueT> PNCounter<HostT, ValueT>
             }
         };
 
-        op.apply(self);
+        self.apply(&op);
 
         Some(op)
     }
 }
 
 impl<HostT, ValueT>
-    Operation<GCounter<HostT, ValueT>>
-    for SetGCounterOperation<HostT, ValueT>
+    OperationRDT
+    for GCounter<HostT, ValueT>
     where HostT: Hash + Eq + Clone,
           ValueT: Ord + Add<ValueT, Output=ValueT> + Zero + Copy
 {
-    fn apply(&self, target: &mut GCounter<HostT, ValueT>) {
-        let cur_value = target.counters.get(&self.id).cloned()
+    type Operation = SetGCounterOperation<HostT, ValueT>;
+
+    fn apply(&mut self, op: &Self::Operation) {
+        let cur_value = self.counters.get(&op.id).cloned()
             .unwrap_or(Zero::zero());
 
-        target.counters.insert(
-            self.id.clone(),
-            *vec![self.value, cur_value].iter().max().unwrap());
+        self.counters.insert(
+            op.id.clone(),
+            *vec![op.value, cur_value].iter().max().unwrap());
     }
 }
 
@@ -151,26 +153,28 @@ impl<HostT, ValueT>
 }
 
 impl<HostT, ValueT>
-    Operation<PNCounter<HostT, ValueT>>
-    for SetPNCounterOperation<HostT, ValueT>
+    OperationRDT
+    for PNCounter<HostT, ValueT>
     where HostT: Hash + Eq + Clone,
           ValueT: Add<ValueT, Output=ValueT> +
                   Sub<ValueT, Output=ValueT> +
                   Neg<Output=ValueT> +
                   Zero + Ord + Copy
 {
-    fn apply(&self, target: &mut PNCounter<HostT, ValueT>) {
-        let cur_pos_value = target.pos_counters.get(&self.id).cloned()
+    type Operation = SetPNCounterOperation<HostT, ValueT>;
+
+    fn apply(&mut self, op: &Self::Operation) {
+        let cur_pos_value = self.pos_counters.get(&op.id).cloned()
             .unwrap_or(Zero::zero());
-        let cur_neg_value = target.neg_counters.get(&self.id).cloned()
+        let cur_neg_value = self.neg_counters.get(&op.id).cloned()
             .unwrap_or(Zero::zero());
 
-        target.pos_counters.insert(
-            self.id.clone(),
-            *vec![self.pos_value, cur_pos_value].iter().max().unwrap());
-        target.neg_counters.insert(
-            self.id.clone(),
-            *vec![self.neg_value, cur_neg_value].iter().max().unwrap());
+        self.pos_counters.insert(
+            op.id.clone(),
+            *vec![op.pos_value, cur_pos_value].iter().max().unwrap());
+        self.neg_counters.insert(
+            op.id.clone(),
+            *vec![op.neg_value, cur_neg_value].iter().max().unwrap());
     }
 }
 
@@ -207,7 +211,7 @@ impl<HostT, ValueT>
 #[cfg(test)]
 mod test {
     use super::{GCounter, PNCounter};
-    use core::{Operation, StateRDT};
+    use core::{StateRDT, OperationRDT};
 
     #[test]
     fn make_g_counter() {
@@ -241,8 +245,8 @@ mod test {
         let op1 = c1.add(5).unwrap();
         let op2 = c2.add(7).unwrap();
 
-        op2.apply(&mut c1);
-        op1.apply(&mut c2);
+        c1.apply(&op2);
+        c2.apply(&op1);
 
         assert_eq!(c1.value(), 12);
         assert_eq!(c2.value(), 12);
@@ -297,8 +301,8 @@ mod test {
         let op1 = c1.add(5).unwrap();
         let op2 = c2.add(-7).unwrap();
 
-        op2.apply(&mut c1);
-        op1.apply(&mut c2);
+        c1.apply(&op2);
+        c2.apply(&op1);
 
         assert_eq!(c1.value(), -2);
         assert_eq!(c2.value(), -2);
